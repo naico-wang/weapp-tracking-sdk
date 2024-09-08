@@ -1,3 +1,5 @@
+/* global Page, App, Component, wx */
+
 const CryptoJS = require('crypto-js');
 const uuidStorageKey = 'mtt_uuid';
 const LOG_TYPE = {
@@ -53,6 +55,7 @@ class WeChatTrackingSDK {
 
   hookApp() {
     const _this = this;
+    // eslint-disable-next-line no-global-assign
     App = function (appOptions) {
       ['onLaunch', 'onShow', 'onHide', 'onError'].forEach(hook => {
         const originalHook = appOptions[hook];
@@ -69,6 +72,7 @@ class WeChatTrackingSDK {
 
   hookPage() {
     const _this = this;
+    // eslint-disable-next-line no-global-assign
     Page = function (pageOptions) {
       _this.lifecycleHooks.forEach(hook => {
         const originalHook = pageOptions[hook];
@@ -87,6 +91,7 @@ class WeChatTrackingSDK {
 
   hookComponent() {
     const _this = this;
+    // eslint-disable-next-line no-global-assign
     Component = function (componentOptions) {
       _this.lifecycleHooks.forEach(hook => {
         const originalHook = componentOptions[hook];
