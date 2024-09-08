@@ -210,95 +210,87 @@ class WeChatTrackingSDK {
   }
 
   getErrorParams(data) {
-    const params = []
-
-    params.push({
-      'key': 'type',
-      'value': LOG_TYPE.ERROR
-    })
-    params.push({
-      'key': 'path',
-      'value': ''
-    })
-    params.push({
-      'key': 'referrerPath',
-      'value': ''
-    })
-    params.push({
-      'key': 'description',
-      'value': data
-    })
-
-    return params
+    return [
+      {
+        key: 'type',
+        value: LOG_TYPE.ERROR,
+      },
+      {
+        key: 'path',
+        value: '',
+      },
+      {
+        key: 'referrerPath',
+        value: '',
+      },
+      {
+        key: 'description',
+        value: data,
+      },
+    ];
   }
 
   getLifeTimeParams(data) {
-    const params = []
-
-    params.push({
-      'key': 'type',
-      'value': LOG_TYPE.LC
-    })
-    params.push({
-      'key': 'path',
-      'value': data.identifier
-    })
-    params.push({
-      'key': 'referrerPath',
-      'value': ''
-    })
-    params.push({
-      'key': 'description',
-      'value': `[${data.type}] - ${data.hook} - ${data.identifier}`
-    })
-
-    return params
+    return [
+      {
+        key: 'type',
+        value: LOG_TYPE.LC,
+      },
+      {
+        key: 'path',
+        value: data.identifier,
+      },
+      {
+        key: 'referrerPath',
+        value: '',
+      },
+      {
+        key: 'description',
+        value: `[${data.type}] - ${data.hook} - ${data.identifier}`,
+      },
+    ];
   }
 
   getEventParams(data) {
-    const params = []
-
-    params.push({
-      'key': 'type',
-      'value': LOG_TYPE.EVENT
-    })
-    params.push({
-      'key': 'path',
-      'value': data.component
-    })
-    params.push({
-      'key': 'referrerPath',
-      'value': ''
-    })
-    params.push({
-      'key': 'description',
-      'value': `[${data.event.type}] - ${data.component} - ${data.methodName}`
-    })
-
-    return params
+    return [
+      {
+        key: 'type',
+        value: LOG_TYPE.EVENT,
+      },
+      {
+        key: 'path',
+        value: data.component,
+      },
+      {
+        key: 'referrerPath',
+        value: '',
+      },
+      {
+        key: 'description',
+        value: `[${data.event.type}] - ${data.component} - ${data.methodName}`,
+      },
+    ];
   }
 
   getPerformanceParams(entry) {
-    const params = []
-
-    params.push({
-      'key': 'type',
-      'value': LOG_TYPE.PERF
-    })
-    params.push({
-      'key': 'path',
-      'value': entry.path
-    })
-    params.push({
-      'key': 'referrerPath',
-      'value': entry.referrerPath
-    })
-    params.push({
-      'key': 'description',
-      'value': `[${entry.entryType}] - ${entry.name} - StartTime: ${entry.startTime} - ${entry.duration}`
-    })
-
-    return params
+    return [
+      {
+        key: 'type',
+        value: LOG_TYPE.PERF,
+      },
+      {
+        key: 'path',
+        value: entry.path,
+      },
+      {
+        key: 'referrerPath',
+        value: entry.referrerPath,
+      },
+      {
+        key: 'description',
+        value: `[${entry.entryType}] - ${entry.name} - StartTime: ${entry.startTime} - ${entry.duration}`,
+      },
+    ];
   }
 
   getBaseParams() {
