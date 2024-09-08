@@ -6,13 +6,13 @@ export default {
   input: 'src/index.js',
   output: [
     {
-      file: 'dist/tracking.js',
+      file: 'dist/tracking.cjs.js',
       format: 'cjs',
       sourcemap: 'true',
       exports: 'auto'
     },
     {
-      file: 'dist/index.esm.js',
+      file: 'dist/tracking.esm.js',
       format: 'esm',
       sourcemap: 'true'
     },

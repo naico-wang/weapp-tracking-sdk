@@ -5,6 +5,7 @@ const uuidStorageKey = 'mtt_uuid';
 const LOG_TYPE = {
   LC: 'lifecycle',
   EVENT: 'events',
+  API: 'apiRequest',
   PERF: 'performance',
   ERROR: 'error',
 };
@@ -50,6 +51,7 @@ class WeChatTrackingSDK {
     this.hookApp();
     this.hookPage();
     this.hookComponent();
+    this.hookRequestMethods();
     this.collectPerformance();
   }
 
@@ -123,6 +125,46 @@ class WeChatTrackingSDK {
     });
   }
 
+  hookRequestMethods() {
+    // 保存原始的 wx.request 方法
+    const _this = this;
+    const originalRequest = wx.request;
+
+    // 重写 wx.request 方法
+    wx.request = function (options) {
+      // 你自定义的逻辑
+      // console.log('Request intercepted:', options.url);
+      const startTime = Date.now();
+      const originalSuccess = options.success;
+      const originalFail = options.fail;
+      const originalComplete = options.complete;
+
+      options.success = function (res) {
+        // console.log('Request success:', res);
+        if (originalSuccess) originalSuccess(res);
+      };
+
+      options.fail = function (err) {
+        // console.log('Request failed:', err);
+        if (originalFail) originalFail(err);
+      };
+
+      options.complete = function (res) {
+        let data = {}
+        const endTime = Date.now();
+
+        data.duration = endTime - startTime;
+        // console.log(`Request completed. Duration: ${endTime - startTime}ms`);
+
+        _this.trackApiRequest({ duration: endTime - startTime, path: options.url })
+
+        if (originalComplete) originalComplete(res);
+      };
+
+      return originalRequest(options);
+    };
+  }
+
   collectPerformance() {
     const performance = wx.getPerformance();
     const observer = performance.createObserver(entryList => {
@@ -158,6 +200,10 @@ class WeChatTrackingSDK {
     this.trackingData.push(this.buildTrackingParams(LOG_TYPE.PERF, entry));
   }
 
+  trackApiRequest(data) {
+    this.trackingData.push(this.buildTrackingParams(LOG_TYPE.API, data));
+  }
+
   buildTrackingParams(type, extraData) {
     const baseParams = this.getBaseParams();
 
@@ -166,11 +212,28 @@ class WeChatTrackingSDK {
       [LOG_TYPE.EVENT]: this.getEventParams,
       [LOG_TYPE.LC]: this.getLifeTimeParams,
       [LOG_TYPE.ERROR]: this.getErrorParams,
+      [LOG_TYPE.API]: this.getApiRequestParams,
     };
 
     baseParams.contents.push(...dataMap[type].call(this, extraData));
 
     return baseParams;
+  }
+
+  getApiRequestParams(data) {
+    return [{
+      key: 'type',
+      value: LOG_TYPE.API,
+    }, {
+      key: 'path',
+      value: data.path,
+    }, {
+      key: 'referrerPath',
+      value: '',
+    }, {
+      key: 'description',
+      value: `TotalTime: ${data.duration}ms`,
+    }];
   }
 
   getErrorParams(data) {
