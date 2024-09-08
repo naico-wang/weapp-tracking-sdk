@@ -1,6 +1,7 @@
 // WeChatTrackingSDK.js
 class WeChatTrackingSDK {
-  constructor() {
+  constructor(config) {
+    this.serverUrl = config.serverUrl || 'https://api2.middleware.sit.marriott.com.cn/frontend-log-service/api/logs'
     this.originalPage = Page;
     this.originalComponent = Component;
     this.originalApp = App;
@@ -127,8 +128,42 @@ class WeChatTrackingSDK {
 
   // 性能参数追踪
   trackPerformance(entry) {
+    console.log(entry)
     console.log(`[Tracking] Performance - ${entry.name} - StartTime: ${entry.startTime}`);
     // 这里可以上传数据到服务器
+  }
+
+  buildTrackingParams() {
+    // 获取当前时间 yyyyMMddHHmmss
+    const currentTime = Math.floor(Date.now() / 1000);
+    // 模拟日志数据
+    const logData = {
+      logs: [{
+        time: currentTime,
+        contents: [{
+          key: "action",
+          value: "user called a service"
+        }, {
+          key: "userId",
+          value: 'test_user_id_12345'
+        }, {
+          key: "traceId",
+          value: this.uuid()
+        }]
+      }],
+      topic,
+      source
+    };
+    // 拼接待加密字符串
+    const rawString = currentTime + 'marriottlog' + JSON.stringify(logData);
+    // 使用SHA512加密
+    const encryptedLog = CryptoJS.SHA512(rawString).toString();
+    // 准备要发送到服务器的数据
+    const payload = {
+      data: logData,
+      sign: encryptedLog,
+      timestamp: currentTime
+    };
   }
 }
 
