@@ -2,6 +2,6 @@
 <scroll-view class="scrollarea" scroll-y type="list">
   <view class="container">
     <image bindtap="bindViewTap" class="userinfo-avatar" src="{{userInfo.avatarUrl}}" mode="cover"></image>
-    <text class="userinfo-nickname">{{userInfo.nickName}}</text>
+    <button bindtap="onButtonClick">Click</button>
   </view>
 </scroll-view>
