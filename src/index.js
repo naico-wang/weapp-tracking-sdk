@@ -1,11 +1,11 @@
-const CryptoJS = require('crypto-js')
-const uuidStorageKey = 'mtt_uuid'
+const CryptoJS = require('crypto-js');
+const uuidStorageKey = 'mtt_uuid';
 const LOG_TYPE = {
   LC: 'lifecycle',
   EVENT: 'events',
   PERF: 'performance',
-  ERROR: 'error'
-}
+  ERROR: 'error',
+};
 
 class WeChatTrackingSDK {
   constructor() {
@@ -16,23 +16,34 @@ class WeChatTrackingSDK {
     this.trackingData = [];
     this.isSending = false;
     this.serverUrl = null;
-    this.sendToServer = false
+    this.sendToServer = false;
 
-    this.generateUUID()
+    this.uuid = this.getOrCreateUUID();
+  }
+
+  getOrCreateUUID() {
+    let uuid = wx.getStorageSync(uuidStorageKey);
+    if (!uuid) {
+      uuid = this.generateUUID();
+      wx.setStorageSync(uuidStorageKey, uuid);
+    }
+    return uuid;
   }
 
   generateUUID() {
-    return wx.setStorageSync(uuidStorageKey, this.getUUid())
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
   }
 
   // 初始化 SDK
   init(options = {}) {
-    if (options) {
-      this.serverUrl = options.serverUrl || 'https://api2.middleware.sit.marriott.com.cn/frontend-log-service/api/logs';
-      this.appId = options.appId || ''
-      this.uIdStorageKey = options?.uIdStorageKey || 'userId'
-      this.sendLog = options?.sendLog || false
-    }
+    this.serverUrl = options.serverUrl || 'https://api2.middleware.sit.marriott.com.cn/frontend-log-service/api/logs';
+    this.appId = options.appId || '';
+    this.uIdStorageKey = options.uIdStorageKey || 'userId';
+    this.sendToServer = options.sendLog || false;
 
     this.hookApp();
     this.hookPage();
@@ -40,300 +51,225 @@ class WeChatTrackingSDK {
     this.collectPerformance();
   }
 
-  // Hook App 的生命周期
   hookApp() {
     const _this = this;
-    App = function(appOptions) {
-      ['onLaunch', 'onShow', 'onHide', 'onError'].forEach((hook) => {
+    App = function (appOptions) {
+      ['onLaunch', 'onShow', 'onHide', 'onError'].forEach(hook => {
         const originalHook = appOptions[hook];
-        appOptions[hook] = function(...args) {
+        appOptions[hook] = function (...args) {
           _this.trackLifecycle('App', hook);
-          if (hook === 'onShow') {
-            _this.flushTrackingData();  // 在小程序进入后台时发送追踪数据
-          }
-          if (hook === 'onError') {
-            _this.trackErrorMessage(...args);
-          }
-          if (originalHook) {
-            originalHook.apply(this, args);
-          }
+          if (hook === 'onShow') _this.flushTrackingData();
+          if (hook === 'onError') _this.trackErrorMessage(...args);
+          if (originalHook) originalHook.apply(this, args);
         };
       });
-
       _this.originalApp(appOptions);
     };
   }
 
-  // Hook Page 的生命周期和自定义点击方法
   hookPage() {
     const _this = this;
-    Page = function(pageOptions) {
-      // Hook 页面生命周期
-      _this.lifecycleHooks.forEach((hook) => {
+    Page = function (pageOptions) {
+      _this.lifecycleHooks.forEach(hook => {
         const originalHook = pageOptions[hook];
-        pageOptions[hook] = function(...args) {
+        pageOptions[hook] = function (...args) {
           _this.trackLifecycle('Page', hook, this.route);
-          if (hook === 'onUnload') {
-            _this.flushTrackingData();  // 在页面卸载时发送追踪数据
-          }
-          if (originalHook) {
-            originalHook.apply(this, args);
-          }
+          if (hook === 'onUnload') _this.flushTrackingData();
+          if (originalHook) originalHook.apply(this, args);
         };
       });
 
       // Hook 自定义点击方法
-      Object.keys(pageOptions).forEach((key) => {
-        if (typeof pageOptions[key] === 'function') {
-          const originalMethod = pageOptions[key];
-          pageOptions[key] = function(event) {
-            if (event && event.type === 'tap') {
-              _this.trackClickEvent(this.route, key, event);
-            }
-            originalMethod.apply(this, arguments);
-          };
-        }
-      });
-
+      _this.hookCustomMethods(pageOptions, pageOptions);
       _this.originalPage(pageOptions);
     };
   }
 
-  // Hook Component 的生命周期和自定义点击方法
   hookComponent() {
     const _this = this;
-    Component = function(componentOptions) {
-      // Hook 组件生命周期
-      _this.lifecycleHooks.forEach((hook) => {
+    Component = function (componentOptions) {
+      _this.lifecycleHooks.forEach(hook => {
         const originalHook = componentOptions[hook];
-        componentOptions[hook] = function(...args) {
+        componentOptions[hook] = function (...args) {
           _this.trackLifecycle('Component', hook, this.is);
-          if (hook === 'onUnload') {
-            _this.flushTrackingData();  // 在组件卸载时发送追踪数据
-          }
-          if (originalHook) {
-            originalHook.apply(this, args);
-          }
+          if (hook === 'onUnload') _this.flushTrackingData();
+          if (originalHook) originalHook.apply(this, args);
         };
       });
 
-      // Hook 组件自定义点击方法
-      Object.keys(componentOptions.methods || {}).forEach((key) => {
-        if (typeof componentOptions.methods[key] === 'function') {
-          const originalMethod = componentOptions.methods[key];
-          componentOptions.methods[key] = function(event) {
-            if (event && event.type === 'tap') {
-              _this.trackClickEvent(this.is, key, event);
-            }
-            originalMethod.apply(this, arguments);
-          };
-        }
-      });
-
+      // Hook 自定义点击方法
+      _this.hookCustomMethods(componentOptions.methods, componentOptions);
       _this.originalComponent(componentOptions);
     };
   }
 
-  // 收集小程序的性能参数
+  hookCustomMethods(methods, context) {
+    const _this = this;
+    Object.keys(methods || {}).forEach(key => {
+      if (typeof methods[key] === 'function') {
+        const originalMethod = methods[key];
+        methods[key] = function (event) {
+          if (event && event.type === 'tap') {
+            _this.trackClickEvent(context.route || context.is, key, event);
+          }
+          originalMethod.apply(this, arguments);
+        };
+      }
+    });
+  }
+
   collectPerformance() {
     const performance = wx.getPerformance();
-    const observer = performance.createObserver((entryList) => {
-      entryList.getEntries().forEach((entry) => {
-        this.trackPerformance(entry);
-      });
+    const observer = performance.createObserver(entryList => {
+      entryList.getEntries().forEach(entry => this.trackPerformance(entry));
     });
 
     observer.observe({ entryTypes: ['render', 'navigation'] });
 
     // 收集启动时间
-    const launchTime = performance.now();
-
-    this.trackPerformance({ entryType: 'App', path: '/', name: 'launch', startTime: launchTime, duration: 0, referrerPath: '' });
-  }
-
-  trackErrorMessage(error) {
-    const data = this.buildTrackingParams(LOG_TYPE.ERROR, JSON.stringify(error))
-
-    this.trackingData.push(data)
-  }
-
-  // 生命周期事件追踪
-  trackLifecycle(type, hook, identifier = '') {
-    const data = this.buildTrackingParams(LOG_TYPE.LC, { type, hook, identifier })
-
-    this.trackingData.push(data);
-  }
-
-  // 点击事件追踪
-  trackClickEvent(component, methodName, event) {
-    const data = this.buildTrackingParams(LOG_TYPE.EVENT, { component, methodName, event })
-
-    this.trackingData.push(data);
-  }
-
-  // 性能参数追踪
-  trackPerformance(entry) {
-    const data = this.buildTrackingParams(LOG_TYPE.PERF, entry)
-
-    this.trackingData.push(data)
-  }
-
-  getUUid() {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-        let r = Math.random() * 16 | 0,
-            v = c === 'x' ? r : (r & 0x3 | 0x8);
-        return v.toString(16);
+    this.trackPerformance({
+      entryType: 'App',
+      path: '/',
+      name: 'launch',
+      startTime: performance.now(),
+      duration: 0,
+      referrerPath: '',
     });
   }
 
+  trackErrorMessage(error) {
+    this.trackingData.push(this.buildTrackingParams(LOG_TYPE.ERROR, JSON.stringify(error)));
+  }
+
+  trackLifecycle(type, hook, identifier = '') {
+    this.trackingData.push(this.buildTrackingParams(LOG_TYPE.LC, { type, hook, identifier }));
+  }
+
+  trackClickEvent(component, methodName, event) {
+    this.trackingData.push(this.buildTrackingParams(LOG_TYPE.EVENT, { component, methodName, event }));
+  }
+
+  trackPerformance(entry) {
+    this.trackingData.push(this.buildTrackingParams(LOG_TYPE.PERF, entry));
+  }
 
   buildTrackingParams(type, extraData) {
-    const baseParams = this.getBaseParams()
+    const baseParams = this.getBaseParams();
 
-    if (type === LOG_TYPE.PERF) {
-      baseParams.contents.push(...this.getPerformanceParams(extraData))
-    }
+    const dataMap = {
+      [LOG_TYPE.PERF]: this.getPerformanceParams,
+      [LOG_TYPE.EVENT]: this.getEventParams,
+      [LOG_TYPE.LC]: this.getLifeTimeParams,
+      [LOG_TYPE.ERROR]: this.getErrorParams,
+    };
 
-    if (type === LOG_TYPE.EVENT) {
-      baseParams.contents.push(...this.getEventParams(extraData))
-    }
+    baseParams.contents.push(...dataMap[type].call(this, extraData));
 
-    if (type === LOG_TYPE.LC) {
-      baseParams.contents.push(...this.getLifeTimeParams(extraData))
-    }
-
-    if (type === LOG_TYPE.ERROR) {
-      baseParams.contents.push(...this.getErrorParams(extraData))
-    }
-
-    return baseParams
+    return baseParams;
   }
 
   getErrorParams(data) {
-    return [
-      {
-        key: 'type',
-        value: LOG_TYPE.ERROR,
-      },
-      {
-        key: 'path',
-        value: '',
-      },
-      {
-        key: 'referrerPath',
-        value: '',
-      },
-      {
-        key: 'description',
-        value: data,
-      },
-    ];
+    return [{
+      key: 'type',
+      value: LOG_TYPE.ERROR,
+    }, {
+      key: 'path',
+      value: '',
+    }, {
+      key: 'referrerPath',
+      value: '',
+    }, {
+      key: 'description',
+      value: data,
+    }];
   }
 
   getLifeTimeParams(data) {
-    return [
-      {
-        key: 'type',
-        value: LOG_TYPE.LC,
-      },
-      {
-        key: 'path',
-        value: data.identifier,
-      },
-      {
-        key: 'referrerPath',
-        value: '',
-      },
-      {
-        key: 'description',
-        value: `[${data.type}] - ${data.hook} - ${data.identifier}`,
-      },
-    ];
+    return [{
+      key: 'type',
+      value: LOG_TYPE.LC,
+    }, {
+      key: 'path',
+      value: data.identifier,
+    }, {
+      key: 'referrerPath',
+      value: '',
+    }, {
+      key: 'description',
+      value: `[${data.type}] - ${data.hook} - ${data.identifier}`,
+    }];
   }
 
   getEventParams(data) {
-    return [
-      {
-        key: 'type',
-        value: LOG_TYPE.EVENT,
-      },
-      {
-        key: 'path',
-        value: data.component,
-      },
-      {
-        key: 'referrerPath',
-        value: '',
-      },
-      {
-        key: 'description',
-        value: `[${data.event.type}] - ${data.component} - ${data.methodName}`,
-      },
-    ];
+    return [{
+      key: 'type',
+      value: LOG_TYPE.EVENT,
+    }, {
+      key: 'path',
+      value: data.component,
+    }, {
+      key: 'referrerPath',
+      value: '',
+    }, {
+      key: 'description',
+      value: `[${data.event.type}] - ${data.component} - ${data.methodName}`,
+    }];
   }
 
   getPerformanceParams(entry) {
-    return [
-      {
-        key: 'type',
-        value: LOG_TYPE.PERF,
-      },
-      {
-        key: 'path',
-        value: entry.path,
-      },
-      {
-        key: 'referrerPath',
-        value: entry.referrerPath,
-      },
-      {
-        key: 'description',
-        value: `[${entry.entryType}] - ${entry.name} - StartTime: ${entry.startTime} - ${entry.duration}`,
-      },
-    ];
+    return [{
+      key: 'type',
+      value: LOG_TYPE.PERF,
+    }, {
+      key: 'path',
+      value: entry.path,
+    }, {
+      key: 'referrerPath',
+      value: entry.referrerPath,
+    }, {
+      key: 'description',
+      value: `[${entry.entryType}] - ${entry.name} - StartTime: ${entry.startTime} - ${entry.duration}`,
+    }];
   }
 
   getBaseParams() {
-    // 获取当前时间 yyyyMMddHHmmss
     const currentTime = Math.floor(Date.now() / 1000);
-
     return {
       time: currentTime,
       contents: [{
         key: "userId",
-        value: wx.getStorageSync(this.uIdStorageKey) || ''
+        value: wx.getStorageSync(this.uIdStorageKey) || '',
       }, {
         key: "traceId",
-        value: wx.getStorageSync(uuidStorageKey)
-      }]
-    }
+        value: this.uuid,
+      }],
+    };
   }
 
   flushTrackingData() {
-    if (this.isSending || this.trackingData.length === 0) {
-      return;
-    }
+    if (this.isSending || this.trackingData.length === 0) return;
 
     this.isSending = true;
-    const dataToSend = [...this.trackingData];  // 复制数据
-    this.trackingData = [];  // 清空队列
+    const dataToSend = [...this.trackingData];
+    this.trackingData = [];
 
+    this.sendTracking(dataToSend)
+  }
+
+  sendTracking(dataToSend) {
     const currentTime = Math.floor(Date.now() / 1000);
     const logData = {
       source: this.appId,
       topic: 'WMP_LOG',
-      logs: dataToSend
-    }
-
-    // 拼接待加密字符串
+      logs: dataToSend,
+    };
     const rawString = currentTime + 'marriottlog' + JSON.stringify(logData);
-    // 使用SHA512加密
     const encryptedLog = CryptoJS.SHA512(rawString).toString();
-    // 准备要发送到服务器的数据
+
     const payload = {
       data: logData,
       sign: encryptedLog,
-      timestamp: currentTime
+      timestamp: currentTime,
     };
 
     if (!this.serverUrl) {
@@ -343,30 +279,27 @@ class WeChatTrackingSDK {
     }
 
     if (!this.sendToServer) {
-      console.log("[Tracking Data] - ", payload)
+      console.log("[Tracking Data] - ", payload);
       this.isSending = false;
-
       return;
     }
 
     wx.request({
-      url: this.serverUrl,  // 发送到配置的服务器URL
+      url: this.serverUrl,
       method: 'POST',
       data: payload,
       success: () => {
         console.log('Tracking data sent successfully');
       },
       fail: (error) => {
-        // 如果发送失败，可以将数据重新加入队列
         this.trackingData = [...dataToSend, ...this.trackingData];
         console.error('Failed to send tracking data', error);
       },
       complete: () => {
         this.isSending = false;
-      }
+      },
     });
   }
 }
 
-// 导出 SDK 类实例
 module.exports = new WeChatTrackingSDK();
