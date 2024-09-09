@@ -16,6 +16,7 @@ class WeChatTrackingSDK {
     this.originalComponent = Component;
     this.originalApp = App;
     this.lifecycleHooks = ['onLoad', 'onShow', 'onHide', 'onUnload'];
+    this.appHooks = ['onLaunch', 'onShow', 'onHide', 'onError'];
     this.trackingData = [];
     this.isSending = false;
     this.serverUrl = null;
@@ -59,7 +60,7 @@ class WeChatTrackingSDK {
     const _this = this;
     // eslint-disable-next-line no-global-assign
     App = function (appOptions) {
-      ['onLaunch', 'onShow', 'onHide', 'onError'].forEach(hook => {
+      _this.appHooks.forEach(hook => {
         const originalHook = appOptions[hook];
         appOptions[hook] = function (...args) {
           _this.trackLifecycle('App', hook);
@@ -105,21 +106,32 @@ class WeChatTrackingSDK {
       });
 
       // Hook 自定义点击方法
-      _this.hookCustomMethods(componentOptions.methods, componentOptions);
+      _this.hookCustomMethods(componentOptions);
       _this.originalComponent(componentOptions);
     };
   }
 
-  hookCustomMethods(methods, context) {
+  hookCustomMethods(options) {
+    const { methods, lifetimes } = options
     const _this = this;
     Object.keys(methods || {}).forEach(key => {
       if (typeof methods[key] === 'function') {
         const originalMethod = methods[key];
         methods[key] = function (event) {
           if (event && event.type === 'tap') {
-            _this.trackClickEvent(context.route || context.is, key, event);
+            _this.trackClickEvent(options.route || options.is, key, event);
           }
           originalMethod.apply(this, arguments);
+        };
+      }
+    });
+
+    Object.keys(lifetimes || {}).forEach(key => {
+      if (typeof lifetimes[key] === 'function') {
+        const originalMethod = lifetimes[key];
+        lifetimes[key] = function (...args) {
+          _this.trackLifecycle('Component', key, this.is);
+          originalMethod.apply(this, args);
         };
       }
     });
